@@ -1,0 +1,87 @@
+// assets/lld-gateway.js
+(function () {
+  function renderFromData() {
+    try {
+      var container = document.getElementById('lld-payment-instructions') || document.getElementById('lld-qrcode');
+      if (!container) return;
+
+      // support both data-gateway (new) and data-url (older)
+      var gateway = container.getAttribute('data-gateway') || container.getAttribute('data-url') || container.dataset.gateway || container.dataset.url;
+      if (!gateway) {
+        container.innerText = (window.lld_payment_vars && lld_payment_vars.error_text) ? lld_payment_vars.error_text : 'Payment link not available.';
+        return;
+      }
+
+      // Clear
+      container.innerHTML = '';
+
+      // Info label
+      var label = document.createElement('p');
+      label.innerText = (window.lld_payment_vars && lld_payment_vars.scan_text) ? lld_payment_vars.scan_text : 'Scan to pay';
+      container.appendChild(label);
+
+      // QR container
+      var qrDiv = document.createElement('div');
+      container.appendChild(qrDiv);
+
+      // Generate QR
+      if (typeof QRCode === 'function') {
+        try {
+          new QRCode(qrDiv, {
+            text: gateway,
+            width: 180,
+            height: 180,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.H
+          });
+        } catch (e) {
+          console.error('LLD QR error', e);
+          container.appendChild(document.createTextNode((window.lld_payment_vars && lld_payment_vars.error_text) ? lld_payment_vars.error_text : 'QR generation failed.'));
+        }
+      } else {
+        // attempt to load library then render
+        var script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+        script.onload = function () {
+          try {
+            new QRCode(qrDiv, { text: gateway, width: 180, height: 180 });
+          } catch (e) { console.error(e); }
+        };
+        document.body.appendChild(script);
+      }
+
+      // Gateway link
+      var link = document.createElement('a');
+      link.href = gateway;
+      link.target = '_blank';
+      link.innerText = (window.lld_payment_vars && lld_payment_vars.link_text) ? lld_payment_vars.link_text : 'Open gateway';
+      link.style.display = 'block';
+      link.style.marginTop = '10px';
+      container.appendChild(link);
+
+      // Copyable fallback (try to parse address & price)
+      try {
+        var u = new URL(gateway);
+        var p = new URLSearchParams(u.search);
+        var toId = p.get('toId') || p.get('address');
+        var price = p.get('price') || p.get('amount');
+        if (toId) {
+          var fallback = document.createElement('div');
+          fallback.style.marginTop = '8px';
+          fallback.innerHTML = '<strong>Address:</strong> <code>' + toId + '</code><br><strong>Price (LLD):</strong> ' + (price || '') ;
+          container.appendChild(fallback);
+        }
+      } catch (err) {
+        // ignore parse errors
+      }
+
+    } catch (err) {
+      console.error('LLD render error', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', renderFromData);
+  document.addEventListener('updated_checkout', renderFromData);
+  setTimeout(renderFromData, 600);
+})();
